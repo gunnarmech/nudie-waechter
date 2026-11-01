@@ -1,0 +1,41 @@
+name: Nudie-Waechter
+# Dauerlauf: jede Minute pruefen. Ein Lauf dauert knapp 6 Stunden (Grenze bei GitHub);
+# der stuendliche Zeitplan stellt den naechsten in die Warteschlange, damit keine Luecke entsteht.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Testnachricht (Push und E-Mail) senden statt Dauerlauf"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: waechter
+  cancel-in-progress: false
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      NTFY_KANAL: ${{ secrets.NTFY_KANAL }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Letzten Stand holen
+        uses: actions/cache/restore@v4
+        with:
+          path: status.json
+          key: status-${{ github.run_id }}
+          restore-keys: status-
+      - name: Bestand jede Minute pruefen
+        run: python waechter.py ${{ inputs.test && '--test' || '--schleife 345' }}
+      - name: Stand sichern
+        if: always() && !inputs.test
+        uses: actions/cache/save@v4
+        with:
+          path: status.json
+          key: status-${{ github.run_id }}
